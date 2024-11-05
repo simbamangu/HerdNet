@@ -587,6 +587,7 @@ class Trainer:
             self.evaluator.model = self.model
             self.evaluator.logs_filename = filename
             self.evaluator.header = '[{}] - Epoch: [{}]'.format(filename.upper(),epoch)
+            self.evaluator.epoch = epoch
     
     def _is_best(self, val_output: float, mode: str = 'min') -> bool:
         ''' Method to determine the best model for saving checkpoint '''
