@@ -7,7 +7,7 @@ __copyright__ = \
 
     Please contact the author Alexandre Delplanque (alexandre.delplanque@uliege.be) for any questions.
 
-    Last modification: March 18, 2024
+    Last modification: April 02, 2025
     """
 __author__ = "Alexandre Delplanque"
 __license__ = "MIT License"
@@ -40,12 +40,12 @@ parser.add_argument('overlap', type=int,
     help='overlap between patches, in pixels (int)')
 parser.add_argument('dest', type=str,
     help='destination path (str)')
-parser.add_argument('-csv', type=str,
+parser.add_argument('--csv', type=str,
     help='path to a csv file containing annotations (str). Defaults to None')
-parser.add_argument('-min', type=float, default=0.1,
+parser.add_argument('--min', type=float, default=0.1,
     help='minimum fraction of area for an annotation to be kept (float). Defautls to 0.1')
-parser.add_argument('-all', type=bool, default=False,
-    help='set to True to save all patches, not only those containing annotations (bool). Defaults to False')
+parser.add_argument('--all', action='store_true',
+    help='use this flag to save all patches, not only those containing annotations (bool). Defaults to False')
 
 args = parser.parse_args()
 
