@@ -7,7 +7,7 @@ __copyright__ = \
 
     Please contact the author Alexandre Delplanque (alexandre.delplanque@uliege.be) for any questions.
 
-    Last modification: March 18, 2024
+    Last modification: July 23, 2025
     """
 __author__ = "Alexandre Delplanque"
 __license__ = "MIT License"
@@ -229,7 +229,7 @@ class Evaluator:
         
         self._stored_metrics = self.metrics.copy()
 
-        mAP = numpy.mean([self.metrics.ap(c) for c in range(1, self.metrics.num_classes)]).item()
+        mAP = numpy.mean([self.metrics.ap(c) for c in range(1, self.metrics.num_classes) if not numpy.isnan(self.metrics.ap(c))]).item()
         
         self.metrics.aggregate()
 
