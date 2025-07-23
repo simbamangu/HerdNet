@@ -285,6 +285,8 @@ class Metrics:
         
         if len(recalls) == 0 or len(precisions) == 0:
             return 0.
+        elif numpy.isnan(recalls[0]):
+            return numpy.nan
         else:
             return self._compute_AP(recalls, precisions)
     
@@ -299,13 +301,15 @@ class Metrics:
         '''
 
         c = c - 1
+        n_gt = self.fn[c] + self.tp[c]
 
-        if len(self._ap_tables[c]) == 0:
+        if n_gt < 1:
+            return [numpy.nan], [numpy.nan]
+        
+        elif len(self._ap_tables[c]) == 0:
             return [], []
 
         else:
-            n_gt = self.fn[c] + self.tp[c]
-
             sorted_table = sorted(self._ap_tables[c], key=lambda x: x[1], reverse=True)
             sorted_table = numpy.array(sorted_table)
             sorted_table[:,2] = numpy.cumsum(sorted_table[:,2], axis=0)
