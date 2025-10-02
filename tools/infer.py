@@ -107,7 +107,9 @@ def main():
         )
     
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False,
-        sampler=torch.utils.data.SequentialSampler(dataset))
+        sampler=torch.utils.data.SequentialSampler(dataset),
+        pin_memory=torch.cuda.is_available(),
+        num_workers=2)
     
     # Build the trained model
     print('Building the model ...')

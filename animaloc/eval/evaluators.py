@@ -183,7 +183,10 @@ class Evaluator:
         logger = CustomLogger(delimiter=' ', filename=self.logs_filename, work_dir=self.work_dir)
         iter_metrics = self.metrics.copy()
 
-        for i, (images, targets) in enumerate(logger.log_every(self.dataloader, self.print_freq, self.header)):
+        # Prefetch first batch if using CUDA
+        dataloader_iter = iter(logger.log_every(self.dataloader, self.print_freq, self.header))
+
+        for i, (images, targets) in enumerate(dataloader_iter):
 
             images, targets = self.prepare_data(images, targets)
 
@@ -191,7 +194,7 @@ class Evaluator:
                 output = self.stitcher(images[0])
                 output = self.post_stitcher(output)
             else:
-                # output, _ = self.model(images, targets)  
+                # output, _ = self.model(images, targets)
                 output, _ = self.model(images)
 
             if viz and self.vizual_fn is not None:
