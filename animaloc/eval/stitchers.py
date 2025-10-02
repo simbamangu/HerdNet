@@ -131,12 +131,12 @@ class Stitcher(ImageToPatches):
     
     @torch.no_grad()
     def _inference(self, patches: torch.Tensor) -> List[torch.Tensor]:
-        
+
         self.model.eval()
 
         dataset = TensorDataset(patches)
         dataloader = DataLoader(
-            dataset,   
+            dataset,
             batch_size=self.batch_size,
             sampler=SequentialSampler(dataset)
             )
@@ -144,8 +144,13 @@ class Stitcher(ImageToPatches):
         maps = []
         for patch in dataloader:
             patch = patch[0].to(self.device)
-            outputs, _ = self.model(patch)
-            maps = [*maps, *outputs.unsqueeze(0)]
+            with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+                outputs, _ = self.model(patch)
+            # Extend maps list efficiently
+            if isinstance(outputs, torch.Tensor):
+                maps.extend([outputs[i].unsqueeze(0) for i in range(outputs.size(0))])
+            else:
+                maps.append(outputs.unsqueeze(0))
 
         return maps
 
@@ -216,12 +221,12 @@ class HerdNetStitcher(Stitcher):
 
     @torch.no_grad()
     def _inference(self, patches: torch.Tensor) -> List[torch.Tensor]:
-        
+
         self.model.eval()
 
         dataset = TensorDataset(patches)
         dataloader = DataLoader(
-            dataset,   
+            dataset,
             batch_size=self.batch_size,
             sampler=SequentialSampler(dataset)
             )
@@ -229,13 +234,15 @@ class HerdNetStitcher(Stitcher):
         maps = []
         for patch in dataloader:
             patch = patch[0].to(self.device)
-            outputs = self.model(patch)[0]
-            heatmap = outputs[0]
-            scale_factor = heatmap.size(-1) // outputs[1].size(-1)
-            clsmap = F.interpolate(outputs[1], scale_factor=scale_factor, mode='nearest')
-            # cat
-            outmaps = torch.cat([heatmap, clsmap], dim=1)
-            maps = [*maps, *outmaps.unsqueeze(0)]
+            with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+                outputs = self.model(patch)[0]
+                heatmap = outputs[0]
+                scale_factor = heatmap.size(-1) // outputs[1].size(-1)
+                clsmap = F.interpolate(outputs[1], scale_factor=scale_factor, mode='nearest')
+                # cat
+                outmaps = torch.cat([heatmap, clsmap], dim=1)
+            # Extend maps list efficiently
+            maps.extend([outmaps[i].unsqueeze(0) for i in range(outmaps.size(0))])
 
         return maps
 
@@ -354,12 +361,12 @@ class DensityMapStitcher(Stitcher):
 
     @torch.no_grad()
     def _inference(self, patches: torch.Tensor) -> List[torch.Tensor]:
-        
+
         self.model.eval()
 
         dataset = TensorDataset(patches)
         dataloader = DataLoader(
-            dataset,   
+            dataset,
             batch_size=self.batch_size,
             sampler=SequentialSampler(dataset)
             )
@@ -369,16 +376,23 @@ class DensityMapStitcher(Stitcher):
         if len(patches) == 1:
             hann = HannWindow2D(size = self.size[0] // self.down_ratio)
             self.hann_matrix = [hann.get_window('original','up')]
-        
+
         maps = []
-        for patch, hann_2D in zip(dataloader, self.hann_matrix):
+        hann_idx = 0
+        for patch in dataloader:
             patch = patch[0].to(self.device)
-            outputs, _ = self.model(patch)
+            batch_size = patch.size(0)
+            with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+                outputs, _ = self.model(patch)
 
-            # hann filter
-            outputs = outputs * hann_2D.to(outputs.device)
+                # Apply hann filter to each item in batch
+                for i in range(batch_size):
+                    hann_2D = self.hann_matrix[hann_idx + i]
+                    outputs[i] = outputs[i] * hann_2D.to(outputs.device)
 
-            maps = [*maps, *outputs.unsqueeze(0)]
+            # Extend maps list efficiently
+            maps.extend([outputs[i].unsqueeze(0) for i in range(batch_size)])
+            hann_idx += batch_size
 
         return maps
     
