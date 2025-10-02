@@ -66,6 +66,10 @@ args = parser.parse_args()
 
 def main():
 
+    # Enable cuDNN autotuner for better performance
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+
     # Create destination folder
     curr_date = current_date()
     dest = os.path.join(args.root, f"{curr_date}_HerdNet_results")
@@ -103,7 +107,9 @@ def main():
         )
     
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False,
-        sampler=torch.utils.data.SequentialSampler(dataset))
+        sampler=torch.utils.data.SequentialSampler(dataset),
+        pin_memory=torch.cuda.is_available(),
+        num_workers=2)
     
     # Build the trained model
     print('Building the model ...')
@@ -117,8 +123,9 @@ def main():
             model = model,
             size = (args.size,args.size),
             overlap = args.over,
+            batch_size = 8,
             down_ratio = 2,
-            up = True, 
+            up = True,
             reduction = 'mean',
             device_name = device
             ) 
@@ -155,22 +162,27 @@ def main():
     mkdir(dest_thumb)
     img_names = numpy.unique(detections['images'].values).tolist()
     for img_name in img_names:
+        # Load and rotate image once
         img = Image.open(os.path.join(args.root, img_name))
         if args.rot != 0:
             rot = args.rot * 90
             img = img.rotate(rot, expand=True)
-        img_cpy = img.copy()
-        pts = list(detections[detections['images']==img_name][['y','x']].to_records(index=False))
+
+        # Get all detections for this image
+        img_dets = detections[detections['images']==img_name]
+        pts = list(img_dets[['y','x']].to_records(index=False))
         pts = [(y, x) for y, x in pts]
-        output = draw_points(img, pts, color='red', size=10)
+
+        # Draw and save annotated image
+        output = draw_points(img.copy(), pts, color='red', size=10)
         output.save(os.path.join(dest_plots, img_name), quality=95)
 
-        # Create and export thumbnails
-        sp_score = list(detections[detections['images']==img_name][['species','scores']].to_records(index=False))
+        # Create and export all thumbnails from the same loaded image
+        sp_score = list(img_dets[['species','scores']].to_records(index=False))
+        off = args.ts//2
         for i, ((y, x), (sp, score)) in enumerate(zip(pts, sp_score)):
-            off = args.ts//2
             coords = (x - off, y - off, x + off, y + off)
-            thumbnail = img_cpy.crop(coords)
+            thumbnail = img.crop(coords)
             score = round(score * 100, 0)
             thumbnail = draw_text(thumbnail, f"{sp} | {score}%", position=(10,5), font_size=int(0.08*args.ts))
             thumbnail.save(os.path.join(dest_thumb, img_name[:-4] + f'_{i}.JPG'))

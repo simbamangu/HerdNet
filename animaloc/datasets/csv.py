@@ -7,7 +7,7 @@ __copyright__ = \
 
     Please contact the author Alexandre Delplanque (alexandre.delplanque@uliege.be) for any questions.
 
-    Last modification: March 18, 2024
+    Last modification: April 02, 2025
     """
 __author__ = "Alexandre Delplanque"
 __license__ = "MIT License"
@@ -19,6 +19,7 @@ import os
 import PIL
 import numpy
 import albumentations
+import warnings
 
 from torch.utils.data import Dataset
 
@@ -109,6 +110,11 @@ class CSVDataset(Dataset):
 
         self.annotations = AnnotationsFromCSV(self.csv_file)
         self.data = self.annotations.dataframe
+        
+        for col in self.data.columns:
+            if self.data[col].isnull().any():
+                warnings.warn(f"The column '{col}' contains NaNs. These have been replaceb by 0.")
+                self.data[col] = self.data[col].fillna(0)
 
         self.anno_type = self.data.annos[0].atype
 

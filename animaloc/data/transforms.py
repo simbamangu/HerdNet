@@ -565,3 +565,47 @@ class Rotate90:
         image = image.rot90(k=self.k, dims=(1,2))
 
         return image, target
+
+@TRANSFORMS.register()
+class CountObjects:
+    ''' Count the number of objects in target (must at least contain 'labels' key) '''
+
+    def __init__(
+        self, 
+        dtype: str = "long"
+        ) -> None:
+        '''
+        Args:
+            dtype (str, optional):  type of count value returned. Defaults to "long".
+        '''
+
+        if dtype not in ["long","float"]:
+            raise ValueError(f"dtype must be either 'long' or 'float', got '{dtype}'.")
+
+        self.dtype = dtype
+
+    def __call__(
+        self,
+        image: Union[PIL.Image.Image, torch.Tensor],
+        target: Any,
+        ) -> Tuple[torch.Tensor,dict]:
+        '''
+        Args:
+            image (PIL.Image.Image or torch.Tensor): image to transform [C,H,W]
+            target (Any): corresponding target
+        
+        Returns:
+            Tuple[torch.Tensor, Any]:
+                the transormed image and target
+        '''
+
+        if isinstance(image, PIL.Image.Image):
+            image = torchvision.transforms.ToTensor()(image)
+        
+        count = torch.Tensor([len(target["labels"])])
+        if self.dtype == "long":
+            count = count.long()
+        elif self.dtype == "float":
+            count = count.float()
+
+        return image, count

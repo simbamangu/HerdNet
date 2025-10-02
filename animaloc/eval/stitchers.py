@@ -94,22 +94,23 @@ class Stitcher(ImageToPatches):
         self.model.to(self.device)
 
     def __call__(
-        self, 
+        self,
         image: torch.Tensor
         ) -> torch.Tensor:
         ''' Apply the stitching algorithm to the image
 
         Args:
             image (torch.Tensor): image of shape [C,H,W]
-        
+
         Returns:
             torch.Tensor
                 the detections into the coordinate system of the original image
         '''
 
         super(Stitcher, self).__init__(image, self.size, self.overlap)
-        
-        self.image = image.to(torch.device('cpu')) 
+
+        # Keep image on its original device (GPU if available)
+        self.image = image
 
         # step 1 - get patches and limits
         patches = self.make_patches()
@@ -123,7 +124,7 @@ class Stitcher(ImageToPatches):
 
         # (step 4 - upsample)
         if self.up:
-            patched_map = F.interpolate(patched_map, scale_factor=self.down_ratio, 
+            patched_map = F.interpolate(patched_map, scale_factor=self.down_ratio,
                 mode='bilinear', align_corners=True)
 
         return patched_map
@@ -131,21 +132,29 @@ class Stitcher(ImageToPatches):
     
     @torch.no_grad()
     def _inference(self, patches: torch.Tensor) -> List[torch.Tensor]:
-        
+
         self.model.eval()
 
         dataset = TensorDataset(patches)
+        # Don't pin memory if patches are already on GPU
+        use_pin_memory = (self.device.type == 'cuda') and (patches.device.type == 'cpu')
         dataloader = DataLoader(
-            dataset,   
+            dataset,
             batch_size=self.batch_size,
-            sampler=SequentialSampler(dataset)
+            sampler=SequentialSampler(dataset),
+            pin_memory=use_pin_memory
             )
 
         maps = []
         for patch in dataloader:
             patch = patch[0].to(self.device)
-            outputs, _ = self.model(patch)
-            maps = [*maps, *outputs.unsqueeze(0)]
+            with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+                outputs, _ = self.model(patch)
+            # Extend maps list efficiently
+            if isinstance(outputs, torch.Tensor):
+                maps.extend([outputs[i].unsqueeze(0) for i in range(outputs.size(0))])
+            else:
+                maps.append(outputs.unsqueeze(0))
 
         return maps
 
@@ -156,19 +165,27 @@ class Stitcher(ImageToPatches):
         kernel_size = np.array(self.size) // self.down_ratio
         stride = kernel_size - self.overlap // self.down_ratio
         output_size = (
-            self._ncol * kernel_size[0] - ((self._ncol-1) * self.overlap // self.down_ratio), 
+            self._ncol * kernel_size[0] - ((self._ncol-1) * self.overlap // self.down_ratio),
             self._nrow * kernel_size[1] - ((self._nrow-1) * self.overlap // self.down_ratio)
             )
 
-        maps = torch.cat(maps, dim=0)
+        # Pre-allocate tensor instead of using torch.cat
+        n_patches = len(maps)
+        if n_patches > 0:
+            sample_shape = maps[0].shape
+            maps_tensor = torch.empty((n_patches,) + sample_shape[1:], dtype=maps[0].dtype, device=maps[0].device)
+            for i, m in enumerate(maps):
+                maps_tensor[i] = m.squeeze(0)
+        else:
+            maps_tensor = torch.cat(maps, dim=0)
 
         if self.reduction == 'max':
-            out_map = self._max_fold(maps, output_size=output_size,
+            out_map = self._max_fold(maps_tensor, output_size=output_size,
                 kernel_size=tuple(kernel_size), stride=tuple(stride))
         else:
-            n_patches = maps.shape[0]
-            maps = maps.permute(1,2,3,0).contiguous().view(1, -1, n_patches)
-            out_map = F.fold(maps, output_size=output_size, 
+            n_patches = maps_tensor.shape[0]
+            maps_tensor = maps_tensor.permute(1,2,3,0).contiguous().view(1, -1, n_patches)
+            out_map = F.fold(maps_tensor, output_size=output_size,
                 kernel_size=tuple(kernel_size), stride=tuple(stride))
 
         out_map = out_map[:,:, 0:dh, 0:dw]
@@ -216,26 +233,31 @@ class HerdNetStitcher(Stitcher):
 
     @torch.no_grad()
     def _inference(self, patches: torch.Tensor) -> List[torch.Tensor]:
-        
+
         self.model.eval()
 
         dataset = TensorDataset(patches)
+        # Don't pin memory if patches are already on GPU
+        use_pin_memory = (self.device.type == 'cuda') and (patches.device.type == 'cpu')
         dataloader = DataLoader(
-            dataset,   
+            dataset,
             batch_size=self.batch_size,
-            sampler=SequentialSampler(dataset)
+            sampler=SequentialSampler(dataset),
+            pin_memory=use_pin_memory
             )
 
         maps = []
         for patch in dataloader:
             patch = patch[0].to(self.device)
-            outputs = self.model(patch)[0]
-            heatmap = outputs[0]
-            scale_factor = 16
-            clsmap = F.interpolate(outputs[1], scale_factor=scale_factor, mode='nearest')
-            # cat
-            outmaps = torch.cat([heatmap, clsmap], dim=1)
-            maps = [*maps, *outmaps.unsqueeze(0)]
+            with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+                outputs = self.model(patch)[0]
+                heatmap = outputs[0]
+                scale_factor = heatmap.size(-1) // outputs[1].size(-1)
+                clsmap = F.interpolate(outputs[1], scale_factor=scale_factor, mode='nearest')
+                # cat
+                outmaps = torch.cat([heatmap, clsmap], dim=1)
+            # Extend maps list efficiently
+            maps.extend([outmaps[i].unsqueeze(0) for i in range(outmaps.size(0))])
 
         return maps
 
@@ -260,13 +282,16 @@ class FasterRCNNStitcher(Stitcher):
 
     @torch.no_grad()
     def _inference(self, patches: torch.Tensor) -> List[dict]:
-        
+
         self.model.eval()
         dataset = TensorDataset(patches)
+        # Don't pin memory if patches are already on GPU
+        use_pin_memory = (self.device.type == 'cuda') and (patches.device.type == 'cpu')
         dataloader = DataLoader(
-            dataset,   
+            dataset,
             batch_size=self.batch_size,
-            sampler=SequentialSampler(dataset)
+            sampler=SequentialSampler(dataset),
+            pin_memory=use_pin_memory
             )
 
         maps = []
@@ -354,14 +379,17 @@ class DensityMapStitcher(Stitcher):
 
     @torch.no_grad()
     def _inference(self, patches: torch.Tensor) -> List[torch.Tensor]:
-        
+
         self.model.eval()
 
         dataset = TensorDataset(patches)
+        # Don't pin memory if patches are already on GPU
+        use_pin_memory = (self.device.type == 'cuda') and (patches.device.type == 'cpu')
         dataloader = DataLoader(
-            dataset,   
+            dataset,
             batch_size=self.batch_size,
-            sampler=SequentialSampler(dataset)
+            sampler=SequentialSampler(dataset),
+            pin_memory=use_pin_memory
             )
 
         # 2D Hann windows matrix
@@ -369,16 +397,23 @@ class DensityMapStitcher(Stitcher):
         if len(patches) == 1:
             hann = HannWindow2D(size = self.size[0] // self.down_ratio)
             self.hann_matrix = [hann.get_window('original','up')]
-        
+
         maps = []
-        for patch, hann_2D in zip(dataloader, self.hann_matrix):
+        hann_idx = 0
+        for patch in dataloader:
             patch = patch[0].to(self.device)
-            outputs, _ = self.model(patch)
+            batch_size = patch.size(0)
+            with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+                outputs, _ = self.model(patch)
 
-            # hann filter
-            outputs = outputs * hann_2D.to(outputs.device)
+                # Apply hann filter to each item in batch
+                for i in range(batch_size):
+                    hann_2D = self.hann_matrix[hann_idx + i]
+                    outputs[i] = outputs[i] * hann_2D.to(outputs.device)
 
-            maps = [*maps, *outputs.unsqueeze(0)]
+            # Extend maps list efficiently
+            maps.extend([outputs[i].unsqueeze(0) for i in range(batch_size)])
+            hann_idx += batch_size
 
         return maps
     
