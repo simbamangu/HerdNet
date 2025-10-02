@@ -143,8 +143,10 @@ val_dataloader = DataLoader(
 Instanciate HerdNet
 ```python
 from animaloc.models import HerdNet
+from animaloc.utils import get_device
 
-herdnet = HerdNet(num_classes=num_classes, down_ratio=down_ratio).cuda()
+device = get_device()  # Auto-detects best available device (cuda/mps/cpu)
+herdnet = HerdNet(num_classes=num_classes, down_ratio=down_ratio).to(device)
 ```
 
 Define the losses for training HerdNet
@@ -153,8 +155,10 @@ from torch import Tensor
 from animaloc.models import LossWrapper
 from animaloc.train.losses import FocalLoss
 from torch.nn import CrossEntropyLoss
+from animaloc.utils import get_device
 
-weight = Tensor([0.1, 1.0, 1.0, 1.0]).cuda()
+device = get_device()
+weight = Tensor([0.1, 1.0, 1.0, 1.0]).to(device)
 
 losses = [
     {'loss': FocalLoss(reduction='mean'), 'idx': 0, 'idy': 0, 'lambda': 1.0, 'name': 'focal_loss'},

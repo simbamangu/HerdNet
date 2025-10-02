@@ -28,6 +28,7 @@ from typing import Any, Optional, Dict, List, Callable
 import torch.nn.functional as F
 
 from ..utils.logger import CustomLogger
+from ..utils.device import get_device
 
 from .stitchers import Stitcher
 from .metrics import Metrics
@@ -45,10 +46,10 @@ class Evaluator:
 
     def __init__(
         self,
-        model: torch.nn.Module, 
+        model: torch.nn.Module,
         dataloader: torch.utils.data.DataLoader,
         metrics: Metrics,
-        device_name: str = 'cuda', 
+        device_name: Optional[str] = None,
         print_freq: int = 10,
         stitcher: Optional[Stitcher] = None,
         vizual_fn: Optional[Callable] = None,
@@ -101,7 +102,7 @@ class Evaluator:
         self.model = model
         self.dataloader = dataloader
         self.metrics = metrics
-        self.device = torch.device(device_name)
+        self.device = get_device(device_name)
         self.print_freq = print_freq
         self.stitcher = stitcher
         self.vizual_fn = vizual_fn
@@ -328,9 +329,9 @@ class Evaluator:
 @EVALUATORS.register()
 class HerdNetEvaluator(Evaluator):
 
-    def __init__(self, model: torch.nn.Module, dataloader: torch.utils.data.DataLoader, metrics: Metrics, 
-        lmds_kwargs: dict = {'kernel_size': (3,3)}, device_name: str = 'cuda', print_freq: int = 10, 
-        stitcher: Optional[Stitcher] = None, vizual_fn: Optional[Callable] = None, work_dir: Optional[str] = None, 
+    def __init__(self, model: torch.nn.Module, dataloader: torch.utils.data.DataLoader, metrics: Metrics,
+        lmds_kwargs: dict = {'kernel_size': (3,3)}, device_name: Optional[str] = None, print_freq: int = 10,
+        stitcher: Optional[Stitcher] = None, vizual_fn: Optional[Callable] = None, work_dir: Optional[str] = None,
         header: Optional[str] = None
         ) -> None:
         super().__init__(model, dataloader, metrics, device_name=device_name, print_freq=print_freq, 

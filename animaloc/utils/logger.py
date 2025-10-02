@@ -23,6 +23,7 @@ import csv
 
 # Personnals
 from ..utils.torchvision_utils import *
+from .device import is_gpu_available, get_max_memory_allocated
 from ..utils.useful_funcs import current_date, get_date_time
 
 class CustomLogger(MetricLogger):
@@ -49,7 +50,7 @@ class CustomLogger(MetricLogger):
         iter_time = SmoothedValue(fmt='{avg:.4f}')
         data_time = SmoothedValue(fmt='{avg:.4f}')
         space_fmt = ':' + str(len(str(len(iterable)))) + 'd'
-        if torch.cuda.is_available():
+        if is_gpu_available():
             log_msg = self.delimiter.join([
                 header,
                 '[{0' + space_fmt + '}/{1}]',
@@ -77,18 +78,18 @@ class CustomLogger(MetricLogger):
             if i % print_freq == 0 or i == len(iterable) - 1:
                 eta_seconds = iter_time.global_avg * (len(iterable) - i)
                 eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
-                if torch.cuda.is_available():
+                if is_gpu_available():
                     printed_msg = log_msg.format(
                         i+1, len(iterable), eta=eta_string,
                         meters=str(self),
                         time=str(iter_time), data=str(data_time),
-                        memory=torch.cuda.max_memory_allocated() / MB)
+                        memory=get_max_memory_allocated())
 
                     dict_msg = dict(
                         date= get_date_time()[0], time= get_date_time()[1],
                         header=header, iter=i+1, total_iters=len(iterable),
                         eta=eta_string, iter_time=iter_time, data_time=data_time,
-                        max_mem=torch.cuda.max_memory_allocated() / MB,
+                        max_mem=get_max_memory_allocated(),
                         **self.meters
                     )
 

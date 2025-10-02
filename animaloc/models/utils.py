@@ -15,6 +15,7 @@ __version__ = "0.2.1"
 
 
 import torch
+from ..utils.device import get_device
 
 from typing import Union, Tuple, List, Optional
 
@@ -32,10 +33,8 @@ def load_model(model: torch.nn.Module, pth_path: str) -> torch.nn.Module:
             the model with loaded parameters
     '''
 
-    map_location = torch.device('cpu')
-    if torch.cuda.is_available():
-        map_location = torch.device('cuda')
-    
+    map_location = get_device()
+
     checkpoint = torch.load(pth_path, map_location=map_location)
     model.load_state_dict(checkpoint['model_state_dict'])
 

@@ -30,9 +30,9 @@ setup(
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
-        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.12',
     ],
-    python_requires='~=3.8',
+    python_requires='>=3.12',
     # What does your project relate to?
     keywords='animal localization detection uliege',
 

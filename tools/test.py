@@ -33,6 +33,7 @@ from animaloc.models.utils import load_model, LossWrapper
 from animaloc.eval import Evaluator, Metrics, PointsMetrics, BoxesMetrics
 from animaloc.eval.stitchers import Stitcher
 from animaloc.utils.useful_funcs import current_date, mkdir
+from animaloc.utils.device import get_device
 from animaloc.vizual import PlotPrecisionRecall
 
 def _set_species_labels(cls_dict: dict, df: pandas.DataFrame) -> None:
@@ -149,7 +150,7 @@ def main(cfg: DictConfig) -> None:
     date = current_date()
     wandb.run.name = f'{date}_' + cfg.wandb_run + f'_RUN_{wandb.run.id}'
 
-    device = torch.device(cfg.device_name)
+    device = get_device(cfg.device_name)
 
     # Prepare dataset and dataloader
     print('Building the test dataset ...')

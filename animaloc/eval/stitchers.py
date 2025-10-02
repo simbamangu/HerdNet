@@ -28,6 +28,7 @@ from .utils import HannWindow2D
 from ..data import ImageToPatches
 
 from ..utils.registry import Registry
+from ..utils.device import get_device, get_autocast_context, supports_pinned_memory
 
 STITCHERS = Registry('stitchers', module_key='animaloc.eval.stitchers')
 
@@ -55,7 +56,7 @@ class Stitcher(ImageToPatches):
         down_ratio: int = 1,
         up: bool = False,
         reduction: str = 'sum',
-        device_name: str = 'cuda',
+        device_name: str = None,
         ) -> None:
         '''
         Args:
@@ -89,7 +90,7 @@ class Stitcher(ImageToPatches):
         self.down_ratio = down_ratio
         self.up = up
         self.reduction = reduction
-        self.device = torch.device(device_name)
+        self.device = get_device(device_name)
 
         self.model.to(self.device)
 
@@ -137,7 +138,7 @@ class Stitcher(ImageToPatches):
 
         dataset = TensorDataset(patches)
         # Don't pin memory if patches are already on GPU
-        use_pin_memory = (self.device.type == 'cuda') and (patches.device.type == 'cpu')
+        use_pin_memory = supports_pinned_memory(self.device) and (patches.device.type == 'cpu')
         dataloader = DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -148,7 +149,7 @@ class Stitcher(ImageToPatches):
         maps = []
         for patch in dataloader:
             patch = patch[0].to(self.device)
-            with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+            with get_autocast_context(self.device):
                 outputs, _ = self.model(patch)
             # Extend maps list efficiently
             if isinstance(outputs, torch.Tensor):
@@ -238,7 +239,7 @@ class HerdNetStitcher(Stitcher):
 
         dataset = TensorDataset(patches)
         # Don't pin memory if patches are already on GPU
-        use_pin_memory = (self.device.type == 'cuda') and (patches.device.type == 'cpu')
+        use_pin_memory = supports_pinned_memory(self.device) and (patches.device.type == 'cpu')
         dataloader = DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -249,7 +250,7 @@ class HerdNetStitcher(Stitcher):
         maps = []
         for patch in dataloader:
             patch = patch[0].to(self.device)
-            with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+            with get_autocast_context(self.device):
                 outputs = self.model(patch)[0]
                 heatmap = outputs[0]
                 scale_factor = heatmap.size(-1) // outputs[1].size(-1)
@@ -272,7 +273,7 @@ class FasterRCNNStitcher(Stitcher):
         nms_threshold: float = 0.5,
         score_threshold: float = 0.0,
         batch_size: int = 1,
-        device_name: str = 'cuda',
+        device_name: str = None,
         ) -> None:
         super().__init__(model, size, overlap=overlap, batch_size=batch_size, device_name=device_name)
         
@@ -286,7 +287,7 @@ class FasterRCNNStitcher(Stitcher):
         self.model.eval()
         dataset = TensorDataset(patches)
         # Don't pin memory if patches are already on GPU
-        use_pin_memory = (self.device.type == 'cuda') and (patches.device.type == 'cpu')
+        use_pin_memory = supports_pinned_memory(self.device) and (patches.device.type == 'cpu')
         dataloader = DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -343,7 +344,7 @@ class DensityMapStitcher(Stitcher):
         down_ratio: int = 2,
         adapt_ts: float = 0.0,
         reduction: str = 'mean',
-        device_name: str = 'cuda',
+        device_name: str = None,
         ) -> None:
         super().__init__(model, size, overlap=overlap, batch_size=batch_size, 
             down_ratio=down_ratio, reduction=reduction, device_name=device_name)
@@ -384,7 +385,7 @@ class DensityMapStitcher(Stitcher):
 
         dataset = TensorDataset(patches)
         # Don't pin memory if patches are already on GPU
-        use_pin_memory = (self.device.type == 'cuda') and (patches.device.type == 'cpu')
+        use_pin_memory = supports_pinned_memory(self.device) and (patches.device.type == 'cpu')
         dataloader = DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -403,7 +404,7 @@ class DensityMapStitcher(Stitcher):
         for patch in dataloader:
             patch = patch[0].to(self.device)
             batch_size = patch.size(0)
-            with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+            with get_autocast_context(self.device):
                 outputs, _ = self.model(patch)
 
                 # Apply hann filter to each item in batch

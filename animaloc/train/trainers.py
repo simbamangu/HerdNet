@@ -28,6 +28,7 @@ from torchvision.transforms import ToPILImage
 from typing import List, Optional, Union, Callable, Any
 
 from ..utils.torchvision_utils import SmoothedValue, reduce_dict
+from ..utils.device import get_device
 from ..utils.logger import CustomLogger
 from ..eval.evaluators import Evaluator
 from ..data.transforms import UnNormalize
@@ -55,8 +56,8 @@ class Trainer:
         val_dataloader: Optional[torch.utils.data.DataLoader] = None,
         evaluator: Optional[Evaluator] = None,
         vizual_fn: Optional[Callable] = None,
-        work_dir: Optional[str] = None, 
-        device_name: str = 'cuda', 
+        work_dir: Optional[str] = None,
+        device_name: Optional[str] = None,
         print_freq: int = 50,
         valid_freq: int = 1,
         csv_logger: bool = False
@@ -147,8 +148,8 @@ class Trainer:
         
         assert valid_freq <= num_epochs, \
             'validation frequency must be lower or equal to the number of epochs'
-        
-        self.device = torch.device(device_name)
+
+        self.device = get_device(device_name)
 
         self.model = model.to(self.device)
         self.train_dataloader = train_dataloader

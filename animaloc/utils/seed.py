@@ -19,23 +19,27 @@ import numpy as np
 import torch 
 
 def set_seed(seed):
-    ''' 
-    Function to set seed for reproducibility 
+    '''
+    Function to set seed for reproducibility
 
     Perfect reproducibility is not guaranteed
     see https://pytorch.org/docs/stable/notes/randomness.html
     '''
     # CPU variables
-    random.seed(seed) 
+    random.seed(seed)
     np.random.seed(seed)
     # Python
-    torch.manual_seed(seed) 
+    torch.manual_seed(seed)
     # GPU variables
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True 
-    # torch.set_deterministic(True)
-    torch.backends.cudnn.benchmark = False
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        # torch.set_deterministic(True)
+        torch.backends.cudnn.benchmark = False
+    # MPS (Apple Silicon) variables
+    if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32

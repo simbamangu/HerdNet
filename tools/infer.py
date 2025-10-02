@@ -28,6 +28,7 @@ from torch.utils.data import DataLoader
 from PIL import Image
 
 from animaloc.data.transforms import DownSample, Rotate90
+from animaloc.utils.device import get_device, setup_cudnn, is_gpu_available
 from animaloc.models import LossWrapper, HerdNet
 from animaloc.eval import HerdNetStitcher, HerdNetEvaluator
 from animaloc.eval.metrics import PointsMetrics
@@ -52,9 +53,9 @@ parser.add_argument('-size', type=int, default=512,
     help='patch size use for stitching. Defaults to 512.')
 parser.add_argument('-over', type=int, default=160,
     help='overlap for stitching. Defaults to 160.')
-parser.add_argument('-device', type=str, default='cuda',
+parser.add_argument('-device', type=str, default=None,
     help='device on which model and images will be allocated (str). \
-        Possible values are \'cpu\' or \'cuda\'. Defaults to \'cuda\'.')
+        Possible values are \'cpu\', \'cuda\', or \'mps\'. Defaults to auto-detect.')
 parser.add_argument('-ts', type=int, default=256,
     help='thumbnail size. Defaults to 256.')
 parser.add_argument('-pf', type=int, default=10,
@@ -66,19 +67,16 @@ args = parser.parse_args()
 
 def main():
 
-    # Enable cuDNN autotuner for better performance
-    if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = True
+    # Enable cuDNN autotuner for better performance if using CUDA
+    setup_cudnn(benchmark=True)
 
     # Create destination folder
     curr_date = current_date()
     dest = os.path.join(args.root, f"{curr_date}_HerdNet_results")
     mkdir(dest)
-    
+
     # Read info from PTH file
-    map_location = torch.device('cpu')
-    if torch.cuda.is_available():
-        map_location = torch.device('cuda')
+    map_location = get_device(args.device)
 
     checkpoint = torch.load(args.pth, map_location=map_location)
     classes = checkpoint['classes']
@@ -108,12 +106,12 @@ def main():
     
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False,
         sampler=torch.utils.data.SequentialSampler(dataset),
-        pin_memory=torch.cuda.is_available(),
+        pin_memory=is_gpu_available(),
         num_workers=2)
-    
+
     # Build the trained model
     print('Building the model ...')
-    device = torch.device(args.device)
+    device = get_device(args.device)
     model = HerdNet(num_classes=num_classes, pretrained=False)
     model = LossWrapper(model, [])
     model.load_state_dict(checkpoint['model_state_dict'])

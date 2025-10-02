@@ -100,10 +100,8 @@ def ssim_loss(
 
     (_, channel, _, _) = target.size()
     window = create_window(window_size, channel)
-    
-    if target.is_cuda:
-        window = window.cuda(target.get_device())
-    window = window.type_as(target)
+
+    window = window.to(target.device).type_as(target)
 
     return _ssim_loss(target, output, window, window_size, channel, reduction, weights)
 
@@ -133,11 +131,9 @@ class SSIMLoss(torch.nn.Module):
             window = self.window
         else:
             window = create_window(self.window_size, channel)
-            
-            if target.is_cuda:
-                window = window.cuda(target.get_device())
-            window = window.type_as(target)
-            
+
+            window = window.to(target.device).type_as(target)
+
             self.window = window
             self.channel = channel
 
@@ -241,11 +237,8 @@ class LocalSSIMLoss(torch.nn.Module):
 
         (_, channel, _, _) = target.size()
         window = create_window(self.window_size, channel)
-        
-        if target.is_cuda:
-            window = window.cuda(target.get_device())
 
-        window = window.type_as(target)
+        window = window.to(target.device).type_as(target)
 
         return window
 

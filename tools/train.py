@@ -32,6 +32,7 @@ from animaloc.models.utils import LossWrapper, load_model
 from animaloc.eval import Evaluator, PointsMetrics, Stitcher, BoxesMetrics, ImageLevelMetrics
 
 from animaloc.utils.seed import set_seed
+from animaloc.utils.device import get_device
 from animaloc.utils.useful_funcs import current_date
 
 def _set_species_labels(cls_dict: dict, df: pandas.DataFrame) -> None:
@@ -126,7 +127,7 @@ def _load_losses(cfg: DictConfig) -> tuple:
                 if 'weights' in kwargs.keys():
                     kwargs['weights'] = torch.Tensor(kwargs['weights'])
                 elif 'weight' in kwargs.keys():
-                    kwargs['weight'] = torch.Tensor(kwargs['weight']).to(torch.device(cfg.device_name))
+                    kwargs['weight'] = torch.Tensor(kwargs['weight']).to(get_device(cfg.device_name))
 
             crit_dict = {}
             if args.from_torch:
@@ -229,7 +230,7 @@ def main(cfg: DictConfig) -> None:
 
     # Prepare datasets and dataloaders
     print('Building datasets ...')
-    device = torch.device(cfg.device_name)
+    device = get_device(cfg.device_name)
 
     train_args = cfg.datasets.train
     val_args = cfg.datasets.validate

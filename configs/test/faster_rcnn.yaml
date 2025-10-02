@@ -1,7 +1,7 @@
 wandb_project: 'Sample project'
 wandb_entity: 'youraccountname'
 wandb_run: 'myrun'
-device_name: 'cuda'
+device_name: 'mps'
 
 model: 
   name: 'FasterRCNNResNetFPN'
