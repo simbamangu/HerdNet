@@ -18,3 +18,9 @@ configs/test/*
 !configs/*/faster_rcnn.yaml
 !configs/*/dla34.yaml
 !configs/*/herdnet.yaml
+
+.python-version
+CLAUDE.md
+HerdnetGeneral2022.pth
+TRAINING_GUIDE.md
+pyproject.toml
