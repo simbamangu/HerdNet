@@ -61,7 +61,32 @@ def draw_text(
     )-> PIL.Image.Image:
 
     draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype("segoeui.ttf", size=font_size)
+
+    # Try multiple fonts in order of preference
+    font_candidates = [
+        "segoeui.ttf",  # Windows
+        "DejaVuSans.ttf",  # Linux
+        "Arial.ttf",  # macOS/Windows
+        "Helvetica.ttf",  # macOS
+        "LiberationSans-Regular.ttf",  # Linux
+        "Ubuntu-Regular.ttf",  # Ubuntu
+    ]
+
+    font = None
+    for font_name in font_candidates:
+        try:
+            font = ImageFont.truetype(font_name, size=font_size)
+            break
+        except (OSError, IOError):
+            continue
+
+    # If no TrueType font is found, use default font
+    if font is None:
+        try:
+            font = ImageFont.load_default()
+        except:
+            # Last resort: use PIL's built-in default
+            font = ImageFont.load_default()
 
     l, t, r, b = draw.textbbox(position, text, font=font)
     draw.rectangle((l-5, t-5, r+5, b+5), fill='white')
